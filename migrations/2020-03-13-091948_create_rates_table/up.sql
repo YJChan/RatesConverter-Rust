@@ -1,0 +1,7 @@
+CREATE TABLE tb_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  rate_dt TEXT  NOT NULL,
+  base TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  conversion_rate REAL NOT NULL
+);
