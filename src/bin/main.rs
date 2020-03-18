@@ -3,16 +3,21 @@ extern crate diesel;
 extern crate warp_currency;
 
 use warp::Filter;
+use dotenv::dotenv;
+use std::env;
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
     pretty_env_logger::init();
 
     let api = filters::rates();
 
     let routes = api.with(warp::log("RATES"));
 
-    warp::serve(routes).run(([127, 0, 0, 1], 8888)).await;
+    let port = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or_else(|| 8888);
+
+    warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
 
 mod filters {
@@ -184,7 +189,7 @@ pub mod services {
                 .filter(rate_dt.eq(today_dt))
                 .get_result(&conn).unwrap();
             
-            println!("count is {}", count);
+            // println!("count is {}", count);
             if count > 1 {
                 true
             } else {
