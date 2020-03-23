@@ -2,3 +2,4 @@
 .env
 *.db
 *.lock
+.DS_Store
