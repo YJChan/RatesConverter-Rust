@@ -15,11 +15,11 @@ async fn main() {
 
     let routes = api.with(warp::log("RATES"));
 
-    let port = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or_else(|| 8888);
+    let port = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or_else(|| 8000);
 
-    println!("Listening on port {}", port);
+    println!("Listening on port 0.0.0.0:{}", port);
 
-    warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
 
 mod filters {
