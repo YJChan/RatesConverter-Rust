@@ -17,6 +17,8 @@ async fn main() {
 
     let port = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or_else(|| 8888);
 
+    println!("Listening on port {}", port);
+
     warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
 
