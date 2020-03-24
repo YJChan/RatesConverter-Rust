@@ -5,6 +5,7 @@ RUN apt-get -y upgrade
 RUN apt-get install -y sqlite3 libsqlite3-dev
 RUN apt-get install -y build-essential
 RUN apt-get install -y libssl-dev
+RUN apt-get install -y curl
 WORKDIR /usr/src/rates_converter
 COPY ./target/release/warp-currency /usr/src/rates_converter
 COPY ./target/release/rates.db /usr/src/rates_converter
