@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use super::schema::tb_rates;
 
-#[derive(Queryable, Deserialize, Serialize, Clone)]
+#[table_name = "tb_rates"]
+#[derive(Queryable, QueryableByName, Deserialize, Serialize, Clone)]
 pub struct Rates {
     pub id: i32,
     pub rate_dt: String,
