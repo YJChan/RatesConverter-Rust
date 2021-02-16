@@ -1,3 +1,5 @@
+#![deny(unused_variables)]
+
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
@@ -8,7 +10,6 @@ mod services;
 mod db;
 
 use filters::currency_filter;
-use warp::Filter;
 use dotenv::dotenv;
 use std::env;
 
@@ -17,9 +18,15 @@ async fn main() {
     dotenv().ok();
     pretty_env_logger::init();
 
+    // live rates thread
+    // let (tx, mut rx) = broadcast::channel(4);
+    // rx = tx.subscribe();
+
+    // let live_api = currency_filter::live_rates(tx);
+
     let api = currency_filter::rates();
 
-    let routes = api.with(warp::log("RATES"));
+    let routes = api;
 
     let port = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or_else(|| 8000);
 

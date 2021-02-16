@@ -1,11 +1,18 @@
+use bytes::Bytes;
+use sse::Event;
+#[allow(unused_imports)]
+use tokio::sync::{mpsc, mpsc::error::RecvError};
 use warp::{reject, Rejection, Reply};
+use warp::sse;
 use serde::{Serialize, Deserialize};
 use crate::services::{common_service, currency_service};
-use std::{env, vec};
+use std::{convert::Infallible, env, vec};
 use dotenv::dotenv;
 use super::super::db::models::{NewRate};
 use std::collections::HashMap;
 use chrono::{Duration, Utc};
+// use futures::{Stream};
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 
 #[derive(Debug)]
 struct RequestError;
@@ -43,17 +50,18 @@ struct SevenDayRatesMap {
 }
 
 pub async fn euro_bank_rates() -> Result<impl Reply, warp::Rejection> {
-    
-    let euro_exchange_uri = String::from("http://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml");
-    let euro_bank_rates = common_service::fetch_url(euro_exchange_uri).await.unwrap();
+    dotenv().ok();
+    let euro_exchange_url = env::var("EURO_RATE_URL").expect("Missing euro rate url");    
+    let euro_bank_rates = common_service::fetch_url(euro_exchange_url).await.unwrap();
 
     Ok(warp::reply::with_header(euro_bank_rates, "Content-Type", "text/xml"))
 }
 
 pub async fn daily_rates() -> Result<impl Reply, Rejection> {
     dotenv().ok();
+    let daily_rates_url = env::var("DAILY_RATE_URL").expect("Missing daily rate url");
     let api_key = env::var("FIXER_API_KEY").expect("Missing api key");
-    let api_endpoint = format!("http://data.fixer.io/api/latest?access_key={}&format=1", &api_key);
+    let api_endpoint = format!("{}{}&format=1", &daily_rates_url, &api_key);    
 
     if currency_service::exist_today_rate() {
         let today_rate = currency_service::find_today_rate();            
@@ -103,9 +111,9 @@ pub async fn daily_rates() -> Result<impl Reply, Rejection> {
     }
 }
 
-pub async fn weekly_rates(number_of_days:u8) -> Result<impl Reply, Rejection> {
+pub async fn weekly_rates(mut number_of_days:u8) -> Result<impl Reply, Rejection> {
     if number_of_days > 31 {
-        
+        number_of_days = 31;
     }
     let today_dt = format!("{}", Utc::now().format("%Y-%m-%d"));
     let days_from_now = format!("{}", (Utc::now() - Duration::days(number_of_days as i64)).format("%Y-%m-%d"));
@@ -147,3 +155,53 @@ pub async fn weekly_rates(number_of_days:u8) -> Result<impl Reply, Rejection> {
     Ok(warp::reply::json(&rates_map))
 }
 
+//Result<impl Reply<Stream<Item = Result<Event, RecvError>>>, Rejection> 
+pub async fn live_rates() -> Result<impl Reply, Rejection> {
+    dotenv().ok();
+    let live_rate_url = env::var("LIVE_RATE_SCRAPE_URL").expect("Missing live rate url");
+    let (tx, rx) = mpsc::channel::<Bytes>(8);
+    
+    rate_scraper::scrape_by_url(&live_rate_url, tx.clone()).await;    
+        
+    let rate_stream = ReceiverStream::new(rx);
+    let event_stream = rate_stream.map(move |b| {
+        sse_rate_event(b)
+    });
+    Ok(sse::reply(sse::keep_alive().interval(std::time::Duration::from_secs(1)).stream(event_stream)))
+
+    // Ok(sse::reply(
+    //     sse::keep_alive()
+    //     .interval(std::time::Duration::from_secs(60))
+    //     .stream(move |tx2| {
+    //             let subscriber = tx2.subscribe().recv().await.unwrap();
+    //             let mut message = tokio_stream::iter(subscriber);            
+    //             tokio::pin!(message);
+    //         }
+    //     )
+    // ))
+    // tx.send("ssss".to_string()).unwrap();
+    // Ok(sse::reply(
+    //     sse::keep_alive()
+    //     .interval(std::time::Duration::from_secs(300))
+    //     .stream(            
+    //         tx2.subscribe().into_stream().map(|msg| {
+    //             msg.map(|data| {
+    //                 Event::default()
+    //                 .id(1.to_string())
+    //                 .data(data)
+    //                 .event("message")                    
+    //                 .retry(std::time::Duration::from_millis(10000))                                                                                    
+    //             })
+    //         })
+    //     )
+    // ))
+}
+
+fn sse_rate_event(b: Bytes) -> Result<Event, Infallible> {
+    Ok(
+        sse::Event::default()
+        .data(std::str::from_utf8(&b).unwrap())
+        .event("message")
+        .retry(std::time::Duration::from_millis(1000))
+    )
+}
