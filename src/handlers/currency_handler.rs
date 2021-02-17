@@ -1,5 +1,6 @@
-use bytes::Bytes;
 use sse::Event;
+use tokio::sync::oneshot;
+// use tokio::sync::Mutex;
 #[allow(unused_imports)]
 use tokio::sync::{mpsc, mpsc::error::RecvError};
 use warp::{reject, Rejection, Reply};
@@ -11,8 +12,8 @@ use dotenv::dotenv;
 use super::super::db::models::{NewRate};
 use std::collections::HashMap;
 use chrono::{Duration, Utc};
-// use futures::{Stream};
-use tokio_stream::{StreamExt, wrappers::ReceiverStream};
+use futures::{stream::iter, Stream};
+use tokio_stream::{wrappers::ReceiverStream};
 
 #[derive(Debug)]
 struct RequestError;
@@ -159,26 +160,20 @@ pub async fn weekly_rates(mut number_of_days:u8) -> Result<impl Reply, Rejection
 pub async fn live_rates() -> Result<impl Reply, Rejection> {
     dotenv().ok();
     let live_rate_url = env::var("LIVE_RATE_SCRAPE_URL").expect("Missing live rate url");
-    let (tx, rx) = mpsc::channel::<Bytes>(8);
+    let (tx, rx) = oneshot::channel::<String>();
+    // let rx = Arc::new(Mutex::new(rx));
+    // let mut rate_map: HashMap<String, rate_scraper::LiveCurrencyRate> = HashMap::new();
     
-    rate_scraper::scrape_by_url(&live_rate_url, tx.clone()).await;    
-        
-    let rate_stream = ReceiverStream::new(rx);
-    let event_stream = rate_stream.map(move |b| {
-        sse_rate_event(b)
-    });
-    Ok(sse::reply(sse::keep_alive().interval(std::time::Duration::from_secs(1)).stream(event_stream)))
-
-    // Ok(sse::reply(
-    //     sse::keep_alive()
-    //     .interval(std::time::Duration::from_secs(60))
-    //     .stream(move |tx2| {
-    //             let subscriber = tx2.subscribe().recv().await.unwrap();
-    //             let mut message = tokio_stream::iter(subscriber);            
-    //             tokio::pin!(message);
-    //         }
-    //     )
-    // ))
+    rate_scraper::scrape_by_url(live_rate_url, tx).await;    
+    // let rate_stream = ReceiverStream::new(rx);
+    // let event_stream = rate_stream.map(move |b| {
+    //     sse_rate_event(b)
+    // });
+    // Ok(sse::reply(sse::keep_alive().interval(std::time::Duration::from_secs(1)).stream(event_stream)))
+    let rates = rx.await.unwrap();
+    // let f = future::ok::<_, String>(b);
+    // let event_stream = f.into_stream();
+    Ok(sse::reply(sse_rate_event(rates)))
     // tx.send("ssss".to_string()).unwrap();
     // Ok(sse::reply(
     //     sse::keep_alive()
@@ -197,11 +192,13 @@ pub async fn live_rates() -> Result<impl Reply, Rejection> {
     // ))
 }
 
-fn sse_rate_event(b: Bytes) -> Result<Event, Infallible> {
-    Ok(
-        sse::Event::default()
-        .data(std::str::from_utf8(&b).unwrap())
-        .event("message")
-        .retry(std::time::Duration::from_millis(1000))
-    )
+fn sse_rate_event(b: String) -> impl Stream<Item = Result<Event, Infallible>> {
+    iter(vec![
+        Ok(
+            sse::Event::default()
+            .data(&b)
+            .event("message")
+            .retry(std::time::Duration::from_millis(1000))        
+        )
+    ])
 }
