@@ -18,7 +18,7 @@ pub struct LiveCurrencyRate {
 
 impl Drop for LiveCurrencyRate {
     fn drop(&mut self) {
-        println!("Dropped {}", self.pair);
+        // println!("Dropped {}", self.pair);
     }
 }
 
@@ -39,7 +39,7 @@ impl ScrapedData {
 
 impl Drop for ScrapedData {
     fn drop(&mut self) {
-        println!("Scraped data is dropped");
+        // println!("Scraped data is dropped");
     }
 }
 
