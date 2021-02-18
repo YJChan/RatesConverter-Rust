@@ -103,9 +103,9 @@ pub async fn daily_rates() -> Result<impl Reply, Rejection> {
     }
 }
 
-pub async fn weekly_rates(number_of_days:u8) -> Result<impl Reply, Rejection> {
-    if number_of_days > 31 {
-        
+pub async fn weekly_rates(mut number_of_days:u8) -> Result<impl Reply, Rejection> {
+    if number_of_days > 90 {
+        number_of_days = 90
     }
     let today_dt = format!("{}", Utc::now().format("%Y-%m-%d"));
     let days_from_now = format!("{}", (Utc::now() - Duration::days(number_of_days as i64)).format("%Y-%m-%d"));
